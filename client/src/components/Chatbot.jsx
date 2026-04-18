@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect, useContext } from 'react';
-import { MessageCircle, X, Send, Bot, Database, HeartPulse, Stethoscope, Activity } from 'lucide-react';
+import { useState, useRef, useEffect, useContext } from 'react';
+import { X, Send, Database, HeartPulse, Stethoscope, Activity } from 'lucide-react';
 import api from '../utils/api';
 import { AuthContext } from '../context/AuthContext';
-import { useParams } from 'react-router-dom';
 
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -77,7 +76,9 @@ const Chatbot = () => {
         dragInfo.current.isDragging = false;
         // Release pointer capture
         if (buttonRef.current && e.pointerId) {
-           try { buttonRef.current.releasePointerCapture(e.pointerId); } catch(err) {}
+           try { buttonRef.current.releasePointerCapture(e.pointerId); } catch(err) {
+            console.error(err);
+           }
         }
       }
     };

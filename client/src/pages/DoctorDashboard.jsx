@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
-import { UserPlus, Settings, Eye, Trash2, HeartPulse, ActivitySquare } from 'lucide-react';
+import { UserPlus, Trash2, HeartPulse, ActivitySquare } from 'lucide-react';
 
 const DoctorDashboard = () => {
   const [patients, setPatients] = useState([]);
@@ -20,7 +20,7 @@ const DoctorDashboard = () => {
       const res = await api.get('/patients');
       setPatients(res.data);
     } catch (err) {
-      toast.error('Failed to load patients');
+      toast.error(err.response?.data?.message || 'Failed to load patients');
     } finally {
       setLoading(false);
     }
@@ -49,7 +49,7 @@ const DoctorDashboard = () => {
         toast.success('Patient removed');
         fetchPatients();
       } catch (err) {
-        toast.error('Failed to remove patient');
+        toast.error(err.response?.data?.message || 'Failed to remove patient');
       }
     }
   };

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Vitals = require('../models/Vitals');
 const Patient = require('../models/Patient');
 const auth = require('../middleware/auth');
@@ -8,12 +8,14 @@ const auth = require('../middleware/auth');
 router.post('/', auth, async (req, res) => {
   const { message, mode, patientId } = req.body;
 
-  if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'your_openai_api_key_here') {
-    return res.status(500).json({ message: 'OpenAI API key not configured' });
+  if (!process.env.API_KEY || process.env.API_KEY === 'your_openai_api_key_here') {
+    return res.status(500).json({ message: 'Gemini API key not configured' });
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  let systemPrompt = "You are a helpful and knowledgeable Medical Assistant.";
+  const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+  let systemPrompt = 'You are a helpful and knowledgeable Medical Assistant. Keep your answers concise and professional. ';
 
   if (mode === 'patient_data' && patientId) {
     try {
@@ -22,16 +24,16 @@ router.post('/', auth, async (req, res) => {
 
       if (patient && latestVitals) {
         systemPrompt = `You are a medical data analysis assistant. You are currently looking at the live ICU dashboard for patient ${patient.name}, a ${patient.age}-year-old ${patient.gender} admitted for ${patient.condition}.
-        
+
 Current vitals (as of ${new Date(latestVitals.timestamp).toLocaleString()}):
 - Heart Rate: ${latestVitals.heartRate} BPM
 - SpO2: ${latestVitals.spo2}%
 - Body Temperature: ${latestVitals.temperature}°C
 - ECG Status: ${latestVitals.ecgStatus}
 
-Please answer the user's questions based on this data. If they ask about the patient's condition, analyze the current vitals and provide professional, concise insights. Keep your answers brief and readable.`;
+Answer the user's questions based on this data. Analyze the current vitals and provide professional, concise insights.`;
       } else {
-        systemPrompt += " Note: No patient data is currently available.";
+        systemPrompt += ' Note: No patient data is currently available.';
       }
     } catch (err) {
       console.error('Error fetching patient context for chat', err);
@@ -39,17 +41,11 @@ Please answer the user's questions based on this data. If they ask about the pat
   }
 
   try {
-    const completion = await openai.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: message }
-      ],
-      model: "gpt-3.5-turbo",
-    });
-
-    res.json({ reply: completion.choices[0].message.content });
+    const result = await model.generateContent(`${systemPrompt}\n\nUser: ${message}`);
+    const reply = result.response.text();
+    res.json({ reply });
   } catch (err) {
-    console.error('OpenAI API Error', err);
+    console.error('Gemini API Error', err);
     res.status(500).json({ message: 'Failed to generate response', error: err.message });
   }
 });

@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import { useContext } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
@@ -29,9 +29,7 @@ const Layout = () => {
       {/* Sidebar */}
       <aside className="w-72 glass-card border-l-0 border-y-0 rounded-none shadow-xl flex flex-col z-10 transition-all border-r border-slate-200/60 dark:border-white/10">
         <div className="p-6 flex items-center gap-3 border-b border-gray-100 dark:border-white/10">
-          <div className="bg-gradient-to-br from-primary to-secondary p-2 rounded-lg text-white shadow-lg shadow-primary/30 dark:shadow-none">
-            <Activity size={24} />
-          </div>
+          <img src="/healtrack-logo.png" alt="HealTrack Logo" className="w-[60px] h-[80px] rounded-lg shadow-lg shadow-primary/30 dark:shadow-none bg-[#0F172A] object-contain p-0.5" />
           <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">HealTrack</span>
         </div>
         
