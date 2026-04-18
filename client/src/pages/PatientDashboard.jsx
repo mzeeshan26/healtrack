@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 import api from '../utils/api';
@@ -8,10 +8,11 @@ import { format } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Heart, Activity, Thermometer, Radio, Download, AlertTriangle, Settings, Droplets, ThermometerSun } from 'lucide-react';
+import PropTypes from 'prop-types';
 
 const SOCKET_URL = 'http://localhost:5000';
 
-const PatientDashboard = () => {
+const PatientDashboard = () => {  
   const { id } = useParams();
   const { user } = useContext(AuthContext);
   
@@ -72,7 +73,7 @@ const PatientDashboard = () => {
         setCurrentVitals(hRes.data[0]);
       }
     } catch (err) {
-      toast.error('Failed to load dashboard data');
+      toast.error(err.response?.data?.message || 'Failed to load dashboard data');
     }
   };
 
@@ -84,7 +85,7 @@ const PatientDashboard = () => {
       setShowThresholdModal(false);
       toast.success('Thresholds updated successfully');
     } catch (err) {
-      toast.error('Failed to update thresholds');
+      toast.error(err.response?.data?.message || 'Failed to update thresholds');
     }
   };
 
@@ -146,6 +147,12 @@ const PatientDashboard = () => {
       );
     }
     return null;
+  };
+
+  CustomTooltip.propTypes = {
+    active: PropTypes.bool,
+    payload: PropTypes.arrayOf(PropTypes.shape({ value: PropTypes.number })),
+    label: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   };
 
   return (

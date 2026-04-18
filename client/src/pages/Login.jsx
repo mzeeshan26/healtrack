@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -67,9 +67,7 @@ const Login = () => {
         {/* Left Side: Branding & Aesthetics */}
         <div className="hidden lg:flex flex-col justify-center w-1/2 p-16 animate-in slide-in-from-left-12 duration-1000 relative">
            <div className="flex items-center gap-4 mb-8">
-              <div className="bg-gradient-to-br from-emerald-400 to-cyan-500 p-3.5 rounded-2xl text-white shadow-[0_0_40px_rgba(16,185,129,0.5)]">
-                 <Activity size={36} strokeWidth={2.5}/>
-              </div>
+              <img src="/healtrack-logo.png" alt="HealTrack Logo" className="w-[60px] h-[80px] rounded-2xl shadow-[0_0_40px_rgba(16,185,129,0.5)] bg-[#0F172A] object-contain p-1" />
               <h1 className="text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-500 to-cyan-600 dark:from-emerald-400 dark:to-cyan-400">
                  HealTrack
               </h1>
@@ -106,9 +104,7 @@ const Login = () => {
                  
                  {/* Mobile Logo Fallback */}
                  <div className="flex lg:hidden flex-col items-center mb-8">
-                   <div className="bg-gradient-to-br from-emerald-400 to-cyan-500 p-3 rounded-xl text-white mb-4 shadow-[0_0_30px_rgba(16,185,129,0.4)]">
-                     <Activity size={28} />
-                   </div>
+                   <img src="/healtrack-logo.png" alt="HealTrack Logo" className="w-[60px] h-[80px] rounded-xl mb-4 shadow-[0_0_30px_rgba(16,185,129,0.4)] bg-[#0F172A] object-contain p-0.5" />
                    <h1 className="text-3xl font-extrabold text-slate-800 dark:text-white">HealTrack</h1>
                    <p className="text-emerald-500 font-bold text-xs uppercase tracking-widest mt-1">Authentication</p>
                  </div>
