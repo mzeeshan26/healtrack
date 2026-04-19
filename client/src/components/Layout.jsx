@@ -2,7 +2,7 @@ import { useContext } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ThemeContext } from '../context/ThemeContext';
-import { LogOut, LayoutDashboard, Users, Activity, Sun, Moon, Bell, Settings, FileText, Coffee, PhoneCall } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Sun, Moon, Bell, Settings, FileText, Coffee, PhoneCall, ArrowLeft } from 'lucide-react';
 import Chatbot from './Chatbot';
 import clsx from 'clsx';
 
@@ -97,6 +97,22 @@ const Layout = () => {
             </>
           )}
         </nav>
+
+        {user?.role === 'doctor' && location.pathname.startsWith('/patient/') && (
+          <div className="px-4 pb-3 shrink-0 border-b border-gray-100 dark:border-white/10">
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-primary/25 bg-primary/5 text-primary dark:bg-indigo-500/15 dark:text-indigo-200 dark:border-indigo-400/30 hover:bg-primary/10 dark:hover:bg-indigo-500/25 transition-all font-bold text-sm shadow-sm"
+            >
+              <ArrowLeft size={18} strokeWidth={2.5} />
+              All patients
+            </button>
+            <p className="text-[10px] text-center text-textSecondary dark:text-slate-500 mt-2 font-medium">
+              Exit patient telemetry without signing out
+            </p>
+          </div>
+        )}
 
         <div className="p-4 border-t border-gray-100 dark:border-white/10 flex flex-col gap-2">
           {/* User Profile Bar & Compact Theme Toggle */}

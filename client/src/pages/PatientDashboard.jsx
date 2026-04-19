@@ -11,6 +11,8 @@ import { Heart, Activity, Thermometer, Radio, Download, AlertTriangle, Settings,
 import PropTypes from 'prop-types';
 
 const SOCKET_URL = 'http://localhost:5000';
+/** No vitals packet on the socket for this long → treat as historical snapshot, not live stream */
+const STREAMING_IDLE_MS = 90_000;
 
 const PatientDashboard = () => {  
   const { id } = useParams();
@@ -21,11 +23,20 @@ const PatientDashboard = () => {
   const [currentVitals, setCurrentVitals] = useState(null);
   const [history, setHistory] = useState([]);
   const [connected, setConnected] = useState(false);
+  const [lastSocketVitalsAt, setLastSocketVitalsAt] = useState(null);
+  /** Re-render periodically so "Streaming" becomes stale after STREAMING_IDLE_MS */
+  const [clock, setClock] = useState(() => Date.now());
   
   const [showThresholdModal, setShowThresholdModal] = useState(false);
   const [tData, setTData] = useState(null);
 
   useEffect(() => {
+    const interval = setInterval(() => setClock(Date.now()), 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    setLastSocketVitalsAt(null);
     fetchPatientData();
     
     const socket = io(SOCKET_URL);
@@ -33,6 +44,7 @@ const PatientDashboard = () => {
     socket.on('disconnect', () => setConnected(false));
     
     socket.on(`vitalsUpdate_${id}`, (data) => {
+      setLastSocketVitalsAt(Date.now());
       setCurrentVitals(data);
       setHistory(prev => {
         const newHist = [data, ...prev].slice(0, 100);
@@ -123,6 +135,16 @@ const PatientDashboard = () => {
 
   if (!patient || !thresholds) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
 
+  const isReceivingStream =
+    connected &&
+    lastSocketVitalsAt != null &&
+    clock - lastSocketVitalsAt < STREAMING_IDLE_MS;
+
+  const lastReadingLabel =
+    currentVitals?.timestamp != null
+      ? `Last reading at ${format(new Date(currentVitals.timestamp), 'PPp')}`
+      : 'No saved readings yet';
+
   const getStatusColor = (val, min, max) => {
     if (val < min) return 'border-red-500 text-red-600 bg-red-50/80 shadow-[0_4px_20px_rgba(239,68,68,0.2)] dark:bg-red-500/10 dark:text-red-400';
     if (val > max) return 'border-amber-500 text-amber-600 bg-amber-50/80 shadow-[0_4px_20px_rgba(245,158,11,0.2)] dark:bg-amber-500/10 dark:text-amber-400';
@@ -136,6 +158,8 @@ const PatientDashboard = () => {
   const humidityStatus = currentVitals ? getStatusColor(currentVitals.humidity || 45, thresholds.humidity.min, thresholds.humidity.max) : 'border-gray-200 text-gray-400 bg-slate-50/50 dark:bg-slate-800/50 dark:border-white/10';
 
   const chartData = [...history].reverse().slice(-50);
+
+  const canManageThresholds = user?.role === 'doctor';
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -169,17 +193,45 @@ const PatientDashboard = () => {
            </div>
         </div>
         <div className="flex items-center gap-4 mt-4 sm:mt-0">
-           {user?.role === 'doctor' && (
+           {canManageThresholds && (
              <button onClick={() => setShowThresholdModal(true)} className="px-5 py-2 border border-gray-200 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 hover:shadow-md text-sm font-semibold transition-all shadow-sm dark:text-white">
                Set Limits
              </button>
            )}
-           <div className={`px-4 py-2 rounded-xl text-sm font-bold border flex items-center gap-3 shadow-inner transition-colors ${connected ? 'border-success/30 text-success bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-500/10 dark:to-green-500/10' : 'border-red-500/30 text-red-500 bg-red-50 dark:bg-red-500/10'}`}>
-             <span className="relative flex h-3 w-3">
-               {connected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>}
-               <span className={`relative inline-flex rounded-full h-3 w-3 ${connected ? 'bg-success' : 'bg-red-500'}`}></span>
-             </span>
-             {connected ? 'LIVE TELEMETRY' : 'OFFLINE'}
+           <div
+             className={`px-4 py-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 shadow-inner transition-colors min-w-[12rem] sm:min-w-0 ${
+               !connected
+                 ? 'border-red-500/30 text-red-500 bg-red-50 dark:bg-red-500/10'
+                 : isReceivingStream
+                   ? 'border-success/30 text-success bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-500/10 dark:to-green-500/10'
+                   : 'border-amber-500/30 text-amber-800 dark:text-amber-200 bg-amber-50/90 dark:bg-amber-500/10'
+             }`}
+           >
+             <div className="flex items-center gap-2">
+               <span className="relative flex h-3 w-3 shrink-0">
+                 {connected && isReceivingStream && (
+                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+                 )}
+                 <span
+                   className={`relative inline-flex rounded-full h-3 w-3 shrink-0 ${
+                     !connected ? 'bg-red-500' : isReceivingStream ? 'bg-success' : 'bg-amber-500'
+                   }`}
+                 />
+               </span>
+               <span className="text-sm font-bold leading-tight">
+                 {!connected ? 'OFFLINE' : isReceivingStream ? 'Streaming' : 'Snapshot'}
+               </span>
+             </div>
+             {connected && !isReceivingStream && (
+               <span className="text-xs font-semibold opacity-90 leading-snug sm:text-right sm:max-w-[14rem]">
+                 {lastReadingLabel}
+               </span>
+             )}
+             {connected && isReceivingStream && (
+               <span className="text-xs font-medium opacity-80 leading-snug hidden sm:inline">
+                 Live vitals from device
+               </span>
+             )}
            </div>
         </div>
       </div>
@@ -368,7 +420,7 @@ const PatientDashboard = () => {
       </div>
 
       {/* Threshold Editor Modal */}
-      {showThresholdModal && user?.role === 'doctor' && (
+      {showThresholdModal && canManageThresholds && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-md flex justify-center items-center z-50 p-4">
           <div className="glass-card bg-slate-50/95 dark:bg-slate-900/95 w-full max-w-2xl p-8 shadow-2xl animate-in zoom-in-95 duration-200 border border-white dark:border-white/10">
             <h2 className="text-2xl font-extrabold mb-6 flex items-center gap-2 dark:text-white"><Settings className="text-primary dark:text-indigo-400"/> Adjust Thresholds</h2>

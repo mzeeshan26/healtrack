@@ -1,7 +1,83 @@
 import { useState, useRef, useEffect, useContext } from 'react';
+import ReactMarkdown from 'react-markdown';
+import PropTypes from 'prop-types';
 import { X, Send, Database, HeartPulse, Stethoscope, Activity } from 'lucide-react';
 import api from '../utils/api';
 import { AuthContext } from '../context/AuthContext';
+
+/** Renders model replies as Markdown (## headings, **bold**, lists). */
+function BotMessageMarkdown({ text }) {
+  return (
+    <ReactMarkdown
+      components={{
+        h1: ({ children }) => (
+          <h1 className="text-base font-bold text-slate-900 dark:text-white mt-2 mb-1.5 first:mt-0 pb-1 border-b border-slate-200/80 dark:border-slate-600">
+            {children}
+          </h1>
+        ),
+        h2: ({ children }) => (
+          <h2 className="text-sm font-bold text-teal-800 dark:text-teal-200 mt-3 mb-1.5 first:mt-0 tracking-tight">
+            {children}
+          </h2>
+        ),
+        h3: ({ children }) => (
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mt-2.5 mb-1 first:mt-0">
+            {children}
+          </h3>
+        ),
+        p: ({ children }) => (
+          <p className="mb-2 last:mb-0 text-slate-700 dark:text-slate-200 leading-relaxed">{children}</p>
+        ),
+        ul: ({ children }) => (
+          <ul className="list-disc pl-4 mb-2 space-y-1 text-slate-700 dark:text-slate-200">{children}</ul>
+        ),
+        ol: ({ children }) => (
+          <ol className="list-decimal pl-4 mb-2 space-y-1 text-slate-700 dark:text-slate-200">{children}</ol>
+        ),
+        li: ({ children }) => <li className="leading-relaxed pl-0.5">{children}</li>,
+        strong: ({ children }) => (
+          <strong className="font-bold text-slate-900 dark:text-white">{children}</strong>
+        ),
+        em: ({ children }) => <em className="italic text-slate-800 dark:text-slate-100">{children}</em>,
+        hr: () => <hr className="my-3 border-slate-200 dark:border-slate-600" />,
+        blockquote: ({ children }) => (
+          <blockquote className="border-l-4 border-teal-400/70 pl-3 my-2 text-slate-600 dark:text-slate-300 italic text-sm">
+            {children}
+          </blockquote>
+        ),
+        a: ({ children, href }) => (
+          <a
+            href={href}
+            className="text-teal-600 dark:text-teal-400 underline font-medium break-all"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {children}
+          </a>
+        ),
+        pre: ({ children }) => (
+          <pre className="my-2 p-3 rounded-lg bg-slate-900/90 text-slate-100 text-xs overflow-x-auto font-mono border border-slate-700">
+            {children}
+          </pre>
+        ),
+        code: ({ children, className }) =>
+          className?.includes('language-') ? (
+            <code className={`${className} text-inherit`}>{children}</code>
+          ) : (
+            <code className="px-1.5 py-0.5 rounded-md bg-slate-200/90 dark:bg-slate-700/90 text-xs font-mono text-slate-900 dark:text-slate-100">
+              {children}
+            </code>
+          ),
+      }}
+    >
+      {text}
+    </ReactMarkdown>
+  );
+}
+
+BotMessageMarkdown.propTypes = {
+  text: PropTypes.string.isRequired,
+};
 
 const Chatbot = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -225,14 +301,18 @@ const Chatbot = () => {
           <div className="flex-1 p-6 overflow-y-auto bg-gradient-to-b from-white/30 to-white/10 dark:from-slate-900/50 dark:to-slate-800/50 space-y-6 custom-scrollbar relative">
             {messages.map((m, i) => (
               <div key={i} className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'} max-w-full`}>
-                <div className={`max-w-[85%] p-3.5 shadow-md font-medium text-sm transition-all
+                <div className={`max-w-[85%] p-3.5 shadow-md text-sm transition-all
                   ${m.sender === 'user' 
-                    ? 'bg-gradient-to-br from-teal-500 to-cyan-600 dark:from-teal-600 dark:to-cyan-700 text-white rounded-2xl rounded-tr-sm' 
+                    ? 'bg-gradient-to-br from-teal-500 to-cyan-600 dark:from-teal-600 dark:to-cyan-700 text-white rounded-2xl rounded-tr-sm font-medium' 
                     : m.isError 
-                      ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-2xl rounded-tl-sm border border-red-200 dark:border-red-900/50'
-                      : 'bg-slate-50/90 dark:bg-slate-800/90 backdrop-blur-sm text-textPrimary dark:text-slate-200 rounded-2xl rounded-tl-sm border border-white dark:border-white/5'}
+                      ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-2xl rounded-tl-sm border border-red-200 dark:border-red-900/50 font-medium'
+                      : 'bg-slate-50/90 dark:bg-slate-800/90 backdrop-blur-sm text-textPrimary dark:text-slate-200 rounded-2xl rounded-tl-sm border border-white dark:border-white/5 font-normal'}
                 `}>
-                  {m.text}
+                  {m.sender === 'user' || m.isError ? (
+                    m.text
+                  ) : (
+                    <BotMessageMarkdown text={m.text} />
+                  )}
                 </div>
                 <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 mt-1.5 mx-2 uppercase">
                   {m.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}

@@ -8,14 +8,19 @@ const auth = require('../middleware/auth');
 router.post('/', auth, async (req, res) => {
   const { message, mode, patientId } = req.body;
 
-  if (!process.env.API_KEY || process.env.API_KEY === 'your_openai_api_key_here') {
+  const geminiKey = (process.env.GEMINI_API_KEY || process.env.API_KEY || '').trim();
+  if (!geminiKey || geminiKey === 'your_openai_api_key_here') {
     return res.status(500).json({ message: 'Gemini API key not configured' });
   }
 
-  const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+  const genAI = new GoogleGenerativeAI(geminiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-  let systemPrompt = 'You are a helpful and knowledgeable Medical Assistant. Keep your answers concise and professional. ';
+  const formatRules =
+    'Always format your entire reply in Markdown that will render in a chat UI: use ## for each main section heading (not plain text in asterisks), **bold** for key labels and emphasis, short bullet lists with - for points, and blank lines between sections. Never use single-asterisk pseudo-headings like *Section*; use real ## headings instead.';
+
+  let systemPrompt =
+    `You are a helpful and knowledgeable Medical Assistant. Keep your answers concise and professional. ${formatRules} `;
 
   if (mode === 'patient_data' && patientId) {
     try {
@@ -31,7 +36,7 @@ Current vitals (as of ${new Date(latestVitals.timestamp).toLocaleString()}):
 - Body Temperature: ${latestVitals.temperature}°C
 - ECG Status: ${latestVitals.ecgStatus}
 
-Answer the user's questions based on this data. Analyze the current vitals and provide professional, concise insights.`;
+Answer the user's questions based on this data. Analyze the current vitals and provide professional, concise insights. ${formatRules}`;
       } else {
         systemPrompt += ' Note: No patient data is currently available.';
       }

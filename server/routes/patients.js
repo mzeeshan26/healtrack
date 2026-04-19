@@ -7,7 +7,7 @@ const Threshold = require('../models/Threshold');
 const auth = require('../middleware/auth');
 const role = require('../middleware/role');
 
-// Get all patients (Doctor only)
+// Get all patients (Doctor only — assigned to this account)
 router.get('/', auth, role(['doctor']), async (req, res) => {
   try {
     const patients = await Patient.find({ assignedDoctor: req.user.id });

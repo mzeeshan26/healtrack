@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -41,7 +42,7 @@ const connectDB = async () => {
     await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/healtrack');
     console.log('MongoDB Connected');
     
-    // Seed Superadmin / Doctor
+    // Seed default doctor (admin) account
     const doctorExists = await User.findOne({ role: 'doctor' });
     if (!doctorExists) {
       const salt = await bcrypt.genSalt(10);
