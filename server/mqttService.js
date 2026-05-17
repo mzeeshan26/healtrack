@@ -30,11 +30,21 @@ const setupMQTT = (io) => {
         return;
       }
 
-      const { heartRate, spo2, temperature, ecgStatus, ecgRaw, roomTemperature, humidity } = data;
+      const { heartRate, spo2, temperature, ecgStatus, ecgRaw, ecgBuffer, roomTemperature, humidity } = data;
       
       if (heartRate == null || spo2 == null || temperature == null) {
           return; // invalid payload
       }
+
+      const normalizedEcgBuffer = Array.isArray(ecgBuffer)
+        ? ecgBuffer.map((v) => Number(v)).filter((v) => !Number.isNaN(v))
+        : [];
+      const resolvedEcgRaw =
+        ecgRaw != null
+          ? Number(ecgRaw)
+          : normalizedEcgBuffer.length
+            ? normalizedEcgBuffer[normalizedEcgBuffer.length - 1]
+            : 0;
 
       const newVitals = new Vitals({
         patientId: patient._id,
@@ -44,7 +54,8 @@ const setupMQTT = (io) => {
         roomTemperature: roomTemperature != null ? roomTemperature : 22.0,
         humidity: humidity != null ? humidity : 45.0,
         ecgStatus: ecgStatus || 'normal',
-        ecgRaw: ecgRaw || 0
+        ecgRaw: resolvedEcgRaw,
+        ecgBuffer: normalizedEcgBuffer.length ? normalizedEcgBuffer : [resolvedEcgRaw],
       });
 
       await newVitals.save();

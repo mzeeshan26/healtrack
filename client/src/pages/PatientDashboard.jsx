@@ -9,7 +9,7 @@ import { jsPDF } from 'jspdf';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Heart, Activity, Thermometer, Radio, Download, Settings, Droplets, ThermometerSun } from 'lucide-react';
 import PropTypes from 'prop-types';
-import EcgWaveformChart, { appendEcgSample, ecgBufferFromHistory } from '../components/EcgWaveformChart';
+import EcgWaveformChart, { appendEcgSamples, ecgPointsFromVitals } from '../components/EcgWaveformChart';
 
 const SOCKET_URL = 'http://localhost:5000';
 /** No vitals packet on the socket for this long → treat as historical snapshot, not live stream */
@@ -23,7 +23,7 @@ const PatientDashboard = () => {
   const [thresholds, setThresholds] = useState(null);
   const [currentVitals, setCurrentVitals] = useState(null);
   const [history, setHistory] = useState([]);
-  const [ecgBuffer, setEcgBuffer] = useState([]);
+  const [ecgChartData, setEcgChartData] = useState([]);
   const [connected, setConnected] = useState(false);
   const [lastSocketVitalsAt, setLastSocketVitalsAt] = useState(null);
   /** Re-render periodically so "Streaming" becomes stale after STREAMING_IDLE_MS */
@@ -39,7 +39,7 @@ const PatientDashboard = () => {
 
   useEffect(() => {
     setLastSocketVitalsAt(null);
-    setEcgBuffer([]);
+    setEcgChartData([]);
     fetchPatientData();
     
     const socket = io(SOCKET_URL);
@@ -49,11 +49,10 @@ const PatientDashboard = () => {
     socket.on(`vitalsUpdate_${id}`, (data) => {
       setLastSocketVitalsAt(Date.now());
       setCurrentVitals(data);
-      setEcgBuffer((prev) => appendEcgSample(prev, data.ecgRaw, data.timestamp));
-      setHistory(prev => {
-        const newHist = [data, ...prev].slice(0, 100);
-        return newHist;
-      });
+      const samples = data.ecgBuffer?.length ? data.ecgBuffer : data.ecgRaw;
+      setEcgChartData((prev) => appendEcgSamples(prev, samples, data.timestamp));
+      const { ecgBuffer: _eb, ...vitalsRow } = data;
+      setHistory((prev) => [vitalsRow, ...prev].slice(0, 100));
     });
 
     return () => socket.disconnect();
@@ -61,10 +60,11 @@ const PatientDashboard = () => {
 
   const fetchPatientData = async () => {
     try {
-      const [pRes, tRes, hRes] = await Promise.all([
+      const [pRes, tRes, hRes, latestRes] = await Promise.all([
         api.get(`/patients/${id}`),
         api.get(`/thresholds/${id}`),
-        api.get(`/vitals/${id}/history`)
+        api.get(`/vitals/${id}/history`),
+        api.get(`/vitals/${id}/latest`),
       ]);
       setPatient(pRes.data);
       
@@ -75,8 +75,11 @@ const PatientDashboard = () => {
       setThresholds(t);
       setTData(t);
       setHistory(hRes.data);
-      setEcgBuffer(ecgBufferFromHistory(hRes.data));
-      if (hRes.data.length > 0) {
+      const latest = latestRes.data;
+      if (latest) {
+        setCurrentVitals(latest);
+        setEcgChartData(ecgPointsFromVitals(latest));
+      } else if (hRes.data.length > 0) {
         setCurrentVitals(hRes.data[0]);
       }
     } catch (err) {
@@ -386,7 +389,7 @@ const PatientDashboard = () => {
           )}
         </div>
         <EcgWaveformChart
-          data={ecgBuffer}
+          data={ecgChartData}
           ecgStatus={currentVitals?.ecgStatus}
           height={380}
         />
@@ -411,6 +414,7 @@ const PatientDashboard = () => {
                       <th className="px-6 py-4 border-b border-gray-100 dark:border-white/5">Body Temp</th>
                       <th className="px-6 py-4 border-b border-gray-100 dark:border-white/5 text-orange-600 dark:text-orange-400">Ambient Temp</th>
                       <th className="px-6 py-4 border-b border-gray-100 dark:border-white/5 text-cyan-600 dark:text-cyan-400">Humidity</th>
+                      <th className="px-6 py-4 border-b border-gray-100 dark:border-white/5">ECG Raw</th>
                       <th className="px-6 py-4 border-b border-gray-100 dark:border-white/5">ECG Status</th>
                    </tr>
                 </thead>
@@ -423,6 +427,7 @@ const PatientDashboard = () => {
                          <td className={`px-6 py-4 font-bold text-lg ${(h.temperature < thresholds.temperature.min || h.temperature > thresholds.temperature.max) ? 'text-amber-500' : 'text-textPrimary dark:text-slate-200'}`}>{h.temperature}°</td>
                          <td className={`px-6 py-4 font-bold text-lg ${(h.roomTemperature < thresholds.roomTemperature.min || h.roomTemperature > thresholds.roomTemperature.max) ? 'text-red-500 dark:text-red-400' : 'text-orange-500 dark:text-orange-400'}`}>{h.roomTemperature || 22}°</td>
                          <td className={`px-6 py-4 font-bold text-lg ${(h.humidity < thresholds.humidity.min || h.humidity > thresholds.humidity.max) ? 'text-blue-600 dark:text-blue-400' : 'text-cyan-500 dark:text-cyan-400'}`}>{h.humidity || 45}%</td>
+                         <td className="px-6 py-4 font-mono font-bold text-slate-600 dark:text-slate-300">{h.ecgRaw ?? '—'}</td>
                          <td className="px-6 py-4 font-semibold">
                             <span className={`px-2 py-1 rounded-md text-xs ${h.ecgStatus === 'abnormal' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'}`}>{h.ecgStatus}</span>
                          </td>

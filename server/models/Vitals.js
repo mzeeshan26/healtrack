@@ -9,6 +9,7 @@ const vitalsSchema = new mongoose.Schema({
   humidity: { type: Number, default: 45.0 },
   ecgStatus: { type: String, required: true },
   ecgRaw: { type: Number, required: true },
+  ecgBuffer: { type: [Number], default: [] },
   timestamp: { type: Date, default: Date.now },
 });
 

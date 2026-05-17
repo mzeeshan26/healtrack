@@ -19,8 +19,9 @@ router.get('/:patientId/history', auth, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 100;
     const vitals = await Vitals.find({ patientId: req.params.patientId })
-                               .sort({ timestamp: -1 })
-                               .limit(limit);
+      .select('-ecgBuffer')
+      .sort({ timestamp: -1 })
+      .limit(limit);
     res.json(vitals);
   } catch (err) {
     res.status(500).json({ message: 'Server Error' });
@@ -30,10 +31,24 @@ router.get('/:patientId/history', auth, async (req, res) => {
 // Manual post for mock data testing (or API fallback)
 router.post('/:patientId', auth, async (req, res) => {
   try {
-    const { heartRate, spo2, temperature, ecgStatus, ecgRaw } = req.body;
+    const { heartRate, spo2, temperature, ecgStatus, ecgRaw, ecgBuffer } = req.body;
+    const normalizedEcgBuffer = Array.isArray(ecgBuffer)
+      ? ecgBuffer.map((v) => Number(v)).filter((v) => !Number.isNaN(v))
+      : [];
+    const resolvedEcgRaw =
+      ecgRaw != null
+        ? Number(ecgRaw)
+        : normalizedEcgBuffer.length
+          ? normalizedEcgBuffer[normalizedEcgBuffer.length - 1]
+          : 0;
     const newVitals = new Vitals({
       patientId: req.params.patientId,
-      heartRate, spo2, temperature, ecgStatus, ecgRaw
+      heartRate,
+      spo2,
+      temperature,
+      ecgStatus,
+      ecgRaw: resolvedEcgRaw,
+      ecgBuffer: normalizedEcgBuffer.length ? normalizedEcgBuffer : [resolvedEcgRaw],
     });
     await newVitals.save();
     
