@@ -1,24 +1,42 @@
-# Logs
-logs
+# --- Environment / Secrets ---
+# Never commit credentials or local environment settings
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+secrets.json
+
+# --- OS Generated Files ---
+# Ignore system-specific files like macOS folder metadata
+.DS_Store
+Thumbs.db
+
+# --- Dependencies & Build Folders ---
+# Ignore large dependency folders (Node.js, Python, etc.)
+node_modules/
+venv/
+.venv/
+__pycache__/
+build/
+dist/
+out/
+
+# --- Log Files ---
+# Ignore log outputs that change frequently
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# --- IDE & Editor Settings ---
+# Ignore personal editor configurations
+.vscode/
+.idea/
+*.swp
+*.iml
