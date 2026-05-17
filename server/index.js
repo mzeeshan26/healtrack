@@ -1,5 +1,12 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '.env'), override: true });
+
+const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
+if (!geminiKey || geminiKey === 'your_gemini_api_key_here') {
+  console.warn('[HealTrack] GEMINI_API_KEY missing or still placeholder in server/.env — chatbot disabled until you save a real key and restart.');
+} else {
+  console.log(`[HealTrack] GEMINI_API_KEY loaded (${geminiKey.length} chars, model: ${process.env.GEMINI_MODEL || 'gemini-2.0-flash'})`);
+}
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');

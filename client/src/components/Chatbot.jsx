@@ -216,11 +216,15 @@ const Chatbot = () => {
       
       setMessages(prev => [...prev, { text: res.data.reply, sender: 'bot', timestamp: new Date() }]);
     } catch (err) {
-      setMessages(prev => [...prev, { 
-        text: err.response?.data?.message || "Sorry, I encountered an error connecting to the AI service.", 
-        sender: 'bot', 
-        timestamp: new Date(), 
-        isError: true 
+      const serverMsg = err.response?.data?.message;
+      const text = serverMsg
+        ? serverMsg
+        : 'Sorry, I could not reach the AI service. Is the server running on port 5000?';
+      setMessages(prev => [...prev, {
+        text,
+        sender: 'bot',
+        timestamp: new Date(),
+        isError: true,
       }]);
     } finally {
       setLoading(false);
