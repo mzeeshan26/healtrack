@@ -7,8 +7,9 @@ import { AuthContext } from '../context/AuthContext';
 import { format } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Heart, Activity, Thermometer, Radio, Download, AlertTriangle, Settings, Droplets, ThermometerSun } from 'lucide-react';
+import { Heart, Activity, Thermometer, Radio, Download, Settings, Droplets, ThermometerSun } from 'lucide-react';
 import PropTypes from 'prop-types';
+import EcgWaveformChart, { appendEcgSample, ecgBufferFromHistory } from '../components/EcgWaveformChart';
 
 const SOCKET_URL = 'http://localhost:5000';
 /** No vitals packet on the socket for this long → treat as historical snapshot, not live stream */
@@ -22,6 +23,7 @@ const PatientDashboard = () => {
   const [thresholds, setThresholds] = useState(null);
   const [currentVitals, setCurrentVitals] = useState(null);
   const [history, setHistory] = useState([]);
+  const [ecgBuffer, setEcgBuffer] = useState([]);
   const [connected, setConnected] = useState(false);
   const [lastSocketVitalsAt, setLastSocketVitalsAt] = useState(null);
   /** Re-render periodically so "Streaming" becomes stale after STREAMING_IDLE_MS */
@@ -37,6 +39,7 @@ const PatientDashboard = () => {
 
   useEffect(() => {
     setLastSocketVitalsAt(null);
+    setEcgBuffer([]);
     fetchPatientData();
     
     const socket = io(SOCKET_URL);
@@ -46,19 +49,10 @@ const PatientDashboard = () => {
     socket.on(`vitalsUpdate_${id}`, (data) => {
       setLastSocketVitalsAt(Date.now());
       setCurrentVitals(data);
+      setEcgBuffer((prev) => appendEcgSample(prev, data.ecgRaw, data.timestamp));
       setHistory(prev => {
         const newHist = [data, ...prev].slice(0, 100);
         return newHist;
-      });
-    });
-
-    socket.on(`vitalsAlert_${id}`, ({ alerts }) => {
-      alerts.forEach(alertStr => {
-        if (alertStr.includes('CRITICAL')) {
-          toast.error(alertStr, { duration: 6000, icon: <AlertTriangle className="text-white" /> });
-        } else {
-          toast(alertStr, { duration: 6000, icon: '⚠️', style: { border: '1px solid #D97706', color: '#D97706' }});
-        }
       });
     });
 
@@ -81,6 +75,7 @@ const PatientDashboard = () => {
       setThresholds(t);
       setTData(t);
       setHistory(hRes.data);
+      setEcgBuffer(ecgBufferFromHistory(hRes.data));
       if (hRes.data.length > 0) {
         setCurrentVitals(hRes.data[0]);
       }
@@ -292,7 +287,7 @@ const PatientDashboard = () => {
           </div>
           {currentVitals && currentVitals.ecgRaw && (
              <div className="mt-5 h-8 w-full overflow-hidden opacity-60 relative flex items-center bg-slate-50/30 dark:bg-black/20 rounded px-2">
-                 <div className="absolute right-2 text-xs font-bold font-mono">f: {currentVitals.ecgRaw}Hz</div>
+                 <div className="text-xs font-bold font-mono">Raw ADC: {currentVitals.ecgRaw}</div>
              </div>
           )}
         </div>
@@ -327,12 +322,12 @@ const PatientDashboard = () => {
         </div>
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="glass-card p-6 shadow-xl shadow-primary/5 dark:shadow-none border border-white/60 dark:border-white/10 relative overflow-visible">
-          <div className="absolute -top-4 -right-4 w-24 h-24 bg-primary/10 rounded-full blur-2xl"></div>
-          <h3 className="font-extrabold text-xl mb-6 text-textPrimary dark:text-white flex items-center gap-2"><Heart className="text-primary dark:text-indigo-400" size={20}/> Heart Rate Matrix</h3>
-          <div className="h-[280px]">
+      {/* Charts Section — HR & SpO2 compact, ECG prominent */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="glass-card p-5 shadow-xl shadow-primary/5 dark:shadow-none border border-white/60 dark:border-white/10 relative overflow-visible">
+          <div className="absolute -top-4 -right-4 w-20 h-20 bg-primary/10 rounded-full blur-2xl"></div>
+          <h3 className="font-extrabold text-lg mb-4 text-textPrimary dark:text-white flex items-center gap-2"><Heart className="text-primary dark:text-indigo-400" size={18}/> Heart Rate</h3>
+          <div className="h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
@@ -353,10 +348,10 @@ const PatientDashboard = () => {
           </div>
         </div>
 
-        <div className="glass-card p-6 shadow-xl shadow-secondary/5 dark:shadow-none border border-white/60 dark:border-white/10 relative overflow-visible">
-          <div className="absolute -top-4 -right-4 w-24 h-24 bg-secondary/10 rounded-full blur-2xl"></div>
-          <h3 className="font-extrabold text-xl mb-6 text-textPrimary dark:text-white flex items-center gap-2"><Activity className="text-secondary dark:text-cyan-400" size={20}/> SpO2 Graph</h3>
-          <div className="h-[280px]">
+        <div className="glass-card p-5 shadow-xl shadow-secondary/5 dark:shadow-none border border-white/60 dark:border-white/10 relative overflow-visible">
+          <div className="absolute -top-4 -right-4 w-20 h-20 bg-secondary/10 rounded-full blur-2xl"></div>
+          <h3 className="font-extrabold text-lg mb-4 text-textPrimary dark:text-white flex items-center gap-2"><Activity className="text-secondary dark:text-cyan-400" size={18}/> SpO2</h3>
+          <div className="h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
@@ -375,6 +370,26 @@ const PatientDashboard = () => {
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
+
+      {/* ECG waveform — full width, larger */}
+      <div className="glass-card p-6 shadow-xl border border-white/60 dark:border-white/10">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-extrabold text-xl text-textPrimary dark:text-white flex items-center gap-2">
+            <Radio className={currentVitals?.ecgStatus === 'abnormal' ? 'text-red-400' : 'text-emerald-400'} size={22} />
+            ECG Waveform
+          </h3>
+          {currentVitals?.ecgRaw != null && (
+            <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
+              Latest sample: <span className="font-bold text-emerald-600 dark:text-emerald-400">{currentVitals.ecgRaw}</span>
+            </span>
+          )}
+        </div>
+        <EcgWaveformChart
+          data={ecgBuffer}
+          ecgStatus={currentVitals?.ecgStatus}
+          height={380}
+        />
       </div>
 
       {/* History Table */}

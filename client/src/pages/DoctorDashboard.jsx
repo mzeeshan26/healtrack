@@ -2,18 +2,19 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
-import { UserPlus, Trash2, HeartPulse, ActivitySquare } from 'lucide-react';
+import { UserPlus, Trash2, HeartPulse, ActivitySquare, Pencil } from 'lucide-react';
+
+const emptyForm = {
+  name: '', age: '', gender: 'Male', condition: '', email: '', password: '', mqttTopic: '', isActive: true
+};
 
 const DoctorDashboard = () => {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [modalMode, setModalMode] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState(emptyForm);
   const navigate = useNavigate();
-  
-  // Add Patient Form State
-  const [formData, setFormData] = useState({
-    name: '', age: '', gender: 'Male', condition: '', email: '', password: '', mqttTopic: ''
-  });
 
   const fetchPatients = async () => {
     try {
@@ -30,15 +31,49 @@ const DoctorDashboard = () => {
     fetchPatients();
   }, []);
 
-  const handleAddPatient = async (e) => {
+  const closeModal = () => {
+    setModalMode(null);
+    setEditingId(null);
+    setFormData(emptyForm);
+  };
+
+  const openAddModal = () => {
+    setFormData(emptyForm);
+    setEditingId(null);
+    setModalMode('add');
+  };
+
+  const openEditModal = (patient) => {
+    setEditingId(patient._id);
+    setFormData({
+      name: patient.name,
+      age: String(patient.age),
+      gender: patient.gender,
+      condition: patient.condition,
+      email: patient.email || '',
+      password: '',
+      mqttTopic: patient.mqttTopic,
+      isActive: patient.isActive !== false,
+    });
+    setModalMode('edit');
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/patients', formData);
-      toast.success('Patient added successfully');
-      setShowAddModal(false);
+      if (modalMode === 'add') {
+        await api.post('/patients', formData);
+        toast.success('Patient added successfully');
+      } else {
+        const payload = { ...formData, isActive: formData.isActive };
+        if (!payload.password) delete payload.password;
+        await api.put(`/patients/${editingId}`, payload);
+        toast.success('Patient updated successfully');
+      }
+      closeModal();
       fetchPatients();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to add patient');
+      toast.error(err.response?.data?.message || `Failed to ${modalMode} patient`);
     }
   };
 
@@ -64,7 +99,7 @@ const DoctorDashboard = () => {
            <p className="text-textSecondary dark:text-slate-400 mt-2 font-medium">Overview of all assigned patients and their telemetry statuses.</p>
         </div>
         <button 
-          onClick={() => setShowAddModal(true)}
+          onClick={openAddModal}
           className="bg-gradient-to-r from-primary to-secondary text-white px-5 py-2.5 rounded-xl font-medium shadow-lg shadow-primary/30 dark:shadow-none hover:shadow-primary/50 transition-all flex items-center gap-2"
         >
           <UserPlus size={20} /> Add Patient
@@ -107,6 +142,13 @@ const DoctorDashboard = () => {
                   <HeartPulse size={18} className="animate-pulse" /> View Telemetry
                 </button>
                 <button 
+                  onClick={() => openEditModal(p)}
+                  className="p-2.5 bg-slate-50 dark:bg-slate-800 text-gray-400 dark:text-slate-400 border border-gray-200 dark:border-slate-200/50/10 hover:text-primary dark:hover:text-indigo-400 hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/30 rounded-xl transition-all shadow-sm"
+                  title="Edit Patient"
+                >
+                  <Pencil size={18} />
+                </button>
+                <button 
                   onClick={() => handleDelete(p._id)}
                   className="p-2.5 bg-slate-50 dark:bg-slate-800 text-gray-400 dark:text-slate-400 border border-gray-200 dark:border-slate-200/50/10 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-200 dark:hover:border-red-500/30 rounded-xl transition-all shadow-sm"
                   title="Remove Patient"
@@ -119,50 +161,64 @@ const DoctorDashboard = () => {
         </div>
       )}
 
-      {/* Add Patient Modal */}
-      {showAddModal && (
+      {/* Add / Edit Patient Modal */}
+      {modalMode && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50">
           <div className="glass-card bg-slate-50/90 dark:bg-slate-900/90 w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto border border-slate-200/50/50 dark:border-slate-200/50/10 shadow-2xl">
-            <h2 className="text-2xl font-bold mb-4 text-textPrimary dark:text-white">Add New Patient</h2>
-            <form onSubmit={handleAddPatient} className="space-y-4">
+            <h2 className="text-2xl font-bold mb-4 text-textPrimary dark:text-white">{modalMode === 'add' ? 'Add New Patient' : 'Edit Patient'}</h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1 dark:text-slate-300">Name</label>
-                  <input required className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, name: e.target.value})} />
+                  <input required value={formData.name} className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, name: e.target.value})} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1 dark:text-slate-300">Age</label>
-                  <input required type="number" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, age: e.target.value})} />
+                  <input required type="number" value={formData.age} className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, age: e.target.value})} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-1 dark:text-slate-300">Gender</label>
-                  <select className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, gender: e.target.value})}>
+                  <select value={formData.gender} className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, gender: e.target.value})}>
                     <option>Male</option><option>Female</option><option>Other</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1 dark:text-slate-300">Condition</label>
-                  <input required className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, condition: e.target.value})} />
+                  <input required value={formData.condition} className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, condition: e.target.value})} />
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 dark:text-slate-300">Email <span className="text-xs text-gray-400 dark:text-slate-500">(for patient login)</span></label>
-                <input required type="email" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, email: e.target.value})} />
+                <input required type="email" value={formData.email} className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, email: e.target.value})} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1 dark:text-slate-300">Password</label>
-                <input required type="password" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, password: e.target.value})} />
+                <label className="block text-sm font-medium mb-1 dark:text-slate-300">
+                  Password {modalMode === 'edit' && <span className="text-xs text-gray-400 dark:text-slate-500">(leave blank to keep current)</span>}
+                </label>
+                <input required={modalMode === 'add'} type="password" value={formData.password} className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, password: e.target.value})} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1 dark:text-slate-300">MQTT Topic <span className="text-xs text-gray-400 dark:text-slate-500">(e.g., healtrack/patient/001)</span></label>
-                <input required placeholder="healtrack/patient/mock_esp8266_001" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, mqttTopic: e.target.value})} />
+                <input required value={formData.mqttTopic} placeholder="healtrack/patient/mock_esp8266_001" className="w-full px-3 py-2 border dark:border-slate-600 rounded-lg dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50" onChange={e => setFormData({...formData, mqttTopic: e.target.value})} />
               </div>
+              {modalMode === 'edit' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={formData.isActive}
+                    onChange={e => setFormData({ ...formData, isActive: e.target.checked })}
+                    className="rounded border-slate-300 text-primary focus:ring-primary/50"
+                  />
+                  <label htmlFor="isActive" className="text-sm font-medium dark:text-slate-300">Active monitoring</label>
+                </div>
+              )}
               
               <div className="flex justify-end gap-3 pt-4 border-t dark:border-slate-200/50/10 mt-2">
-                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors">Cancel</button>
-                <button type="submit" className="px-5 py-2 bg-gradient-to-r from-primary to-secondary text-white rounded-lg shadow-lg hover:shadow-xl transition-all">Add Patient</button>
+                <button type="button" onClick={closeModal} className="px-4 py-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors">Cancel</button>
+                <button type="submit" className="px-5 py-2 bg-gradient-to-r from-primary to-secondary text-white rounded-lg shadow-lg hover:shadow-xl transition-all">{modalMode === 'add' ? 'Add Patient' : 'Save Changes'}</button>
               </div>
             </form>
           </div>

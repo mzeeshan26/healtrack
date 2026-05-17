@@ -39,7 +39,7 @@ const connectDB = async () => {
        console.log('Using in-memory mock or failing... MONGODB_URI not set properly.');
        // For a real scenario, this would fail. We'll attempt anyway.
     }
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/healtrack');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/healtrack');
     console.log('MongoDB Connected');
     
     // Seed default doctor (admin) account

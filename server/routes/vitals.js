@@ -42,24 +42,6 @@ router.post('/:patientId', auth, async (req, res) => {
     const io = req.app.get('socketio');
     if (io) {
       io.emit(`vitalsUpdate_${req.params.patientId}`, newVitals);
-      
-      // Also check thresholds and emit alerts if needed
-      const Threshold = require('../models/Threshold');
-      const thresholds = await Threshold.findOne({ patientId: req.params.patientId });
-      if (thresholds) {
-         let alerts = [];
-         if (heartRate < thresholds.heartRate.min) alerts.push(`CRITICAL: Heart Rate dropped to ${heartRate} BPM (Min: ${thresholds.heartRate.min})`);
-         else if (heartRate > thresholds.heartRate.max) alerts.push(`WARNING: Heart Rate spiked to ${heartRate} BPM (Max: ${thresholds.heartRate.max})`);
-         
-         if (spo2 < thresholds.spo2.min) alerts.push(`CRITICAL: SpO2 dropped to ${spo2}% (Min: ${thresholds.spo2.min}%)`);
-         
-         if (temperature < thresholds.temperature.min) alerts.push(`WARNING: Temperature dropped to ${temperature}°C (Min: ${thresholds.temperature.min}°C)`);
-         else if (temperature > thresholds.temperature.max) alerts.push(`WARNING: Temperature spiked to ${temperature}°C (Max: ${thresholds.temperature.max}°C)`);
-         
-         if (alerts.length > 0) {
-            io.emit(`vitalsAlert_${req.params.patientId}`, { alerts, vitals: newVitals });
-         }
-      }
     }
     
     res.json(newVitals);
