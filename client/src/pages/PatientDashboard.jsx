@@ -10,6 +10,9 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Heart, Activity, Thermometer, Radio, Download, Settings, Droplets, ThermometerSun } from 'lucide-react';
 import PropTypes from 'prop-types';
 import EcgWaveformChart, { appendEcgSamples, ecgPointsFromVitals } from '../components/EcgWaveformChart';
+import ClinicalAlertsPanel from '../components/ClinicalAlertsPanel';
+import VitalRiskBadge from '../components/VitalRiskBadge';
+import { enrichClinicalState } from '../utils/clinicalDisplay';
 
 const SOCKET_URL = 'http://localhost:5000';
 /** No vitals packet on the socket for this long → treat as historical snapshot, not live stream */
@@ -31,9 +34,11 @@ const PatientDashboard = () => {
   
   const [showThresholdModal, setShowThresholdModal] = useState(false);
   const [tData, setTData] = useState(null);
+  const [clinicalState, setClinicalState] = useState(null);
+  const [insightHistory, setInsightHistory] = useState([]);
 
   useEffect(() => {
-    const interval = setInterval(() => setClock(Date.now()), 5000);
+    const interval = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -55,16 +60,25 @@ const PatientDashboard = () => {
       setHistory((prev) => [vitalsRow, ...prev].slice(0, 100));
     });
 
+    socket.on(`clinicalState_${id}`, (state) => {
+      setClinicalState(state);
+    });
+
+    socket.on(`clinicalInsight_${id}`, (insight) => {
+      setInsightHistory((prev) => [insight, ...prev].slice(0, 50));
+    });
+
     return () => socket.disconnect();
   }, [id]);
 
   const fetchPatientData = async () => {
     try {
-      const [pRes, tRes, hRes, latestRes] = await Promise.all([
+      const [pRes, tRes, hRes, latestRes, insightRes] = await Promise.all([
         api.get(`/patients/${id}`),
         api.get(`/thresholds/${id}`),
         api.get(`/vitals/${id}/history`),
         api.get(`/vitals/${id}/latest`),
+        api.get(`/insights/${id}/history`).catch(() => ({ data: [] })),
       ]);
       setPatient(pRes.data);
       
@@ -75,12 +89,28 @@ const PatientDashboard = () => {
       setThresholds(t);
       setTData(t);
       setHistory(hRes.data);
+      setInsightHistory(insightRes.data || []);
       const latest = latestRes.data;
       if (latest) {
         setCurrentVitals(latest);
         setEcgChartData(ecgPointsFromVitals(latest));
+        api.post(`/insights/${id}/reevaluate`).catch(() => {});
       } else if (hRes.data.length > 0) {
         setCurrentVitals(hRes.data[0]);
+      }
+
+      try {
+        const stateRes = await api.get(`/insights/${id}/state`);
+        if (stateRes.data?.vitals) {
+          setClinicalState({
+            vitals: stateRes.data.vitals,
+            evaluatedAt: stateRes.data.evaluatedAt,
+            activeAlerts: [],
+            compositeRules: [],
+          });
+        }
+      } catch {
+        /* tracker empty until first live packet */
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to load dashboard data');
@@ -156,8 +186,11 @@ const PatientDashboard = () => {
   const humidityStatus = currentVitals ? getStatusColor(currentVitals.humidity || 45, thresholds.humidity.min, thresholds.humidity.max) : 'border-gray-200 text-gray-400 bg-slate-50/50 dark:bg-slate-800/50 dark:border-white/10';
 
   const chartData = [...history].reverse().slice(-50);
+  const liveClinical = enrichClinicalState(clinicalState, clock);
 
   const canManageThresholds = user?.role === 'doctor';
+
+  const vitalState = (key) => liveClinical?.vitals?.[key];
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
@@ -234,9 +267,11 @@ const PatientDashboard = () => {
         </div>
       </div>
 
+      <ClinicalAlertsPanel clinicalState={liveClinical} insightHistory={insightHistory} />
+
       {/* Vitals Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-6">
-        <div className={`col-span-1 sm:col-span-1 lg:col-span-3 glass-card glass-interactive p-6 border-l-[6px] transition-all ${hrStatus}`}>
+        <div className={`col-span-1 sm:col-span-1 lg:col-span-3 glass-card glass-interactive p-6 border-l-[6px] transition-all ${vitalState('heartRate')?.phase === 'critical' ? 'ring-2 ring-red-500 animate-critical-pulse' : ''} ${hrStatus}`}>
           <div className="flex justify-between items-center mb-4">
             <span className="font-bold text-sm tracking-widest uppercase opacity-80">Heart Rate</span>
             <div className={`p-2 rounded-lg bg-slate-50/50 dark:bg-white/10 backdrop-blur-sm ${currentVitals && currentVitals.heartRate > 0 ? "animate-heartbeat" : ""}`}>
@@ -248,9 +283,10 @@ const PatientDashboard = () => {
             <span className="text-xl font-bold opacity-80">BPM</span>
           </div>
           <div className="mt-4 text-xs font-semibold opacity-70 bg-slate-50/40 dark:bg-black/20 inline-flex px-2 py-1 rounded-md">Range: {thresholds.heartRate.min} - {thresholds.heartRate.max}</div>
+          <VitalRiskBadge vitalState={vitalState('heartRate')} />
         </div>
         
-        <div className={`col-span-1 sm:col-span-1 lg:col-span-3 glass-card glass-interactive p-6 border-l-[6px] transition-all ${spo2Status}`}>
+        <div className={`col-span-1 sm:col-span-1 lg:col-span-3 glass-card glass-interactive p-6 border-l-[6px] transition-all ${vitalState('spo2')?.phase === 'critical' ? 'ring-2 ring-red-500 animate-critical-pulse' : ''} ${spo2Status}`}>
           <div className="flex justify-between items-center mb-4">
             <span className="font-bold text-sm tracking-widest uppercase opacity-80">SpO2 Level</span>
             <div className="p-2 rounded-lg bg-slate-50/50 dark:bg-white/10 backdrop-blur-sm">
@@ -262,9 +298,10 @@ const PatientDashboard = () => {
             <span className="text-xl font-bold opacity-80">%</span>
           </div>
           <div className="mt-4 text-xs font-semibold opacity-70 bg-slate-50/40 dark:bg-black/20 inline-flex px-2 py-1 rounded-md">Min: {thresholds.spo2.min}%</div>
+          <VitalRiskBadge vitalState={vitalState('spo2')} />
         </div>
 
-        <div className={`col-span-1 sm:col-span-1 lg:col-span-3 glass-card glass-interactive p-6 border-l-[6px] transition-all ${tempStatus}`}>
+        <div className={`col-span-1 sm:col-span-1 lg:col-span-3 glass-card glass-interactive p-6 border-l-[6px] transition-all ${vitalState('temperature')?.phase === 'critical' ? 'ring-2 ring-red-500 animate-critical-pulse' : ''} ${tempStatus}`}>
           <div className="flex justify-between items-center mb-4">
             <span className="font-bold text-sm tracking-widest uppercase opacity-80">Body Temp</span>
             <div className="p-2 rounded-lg bg-slate-50/50 dark:bg-white/10 backdrop-blur-sm">
@@ -276,9 +313,10 @@ const PatientDashboard = () => {
             <span className="text-xl font-bold opacity-80">°C</span>
           </div>
           <div className="mt-4 text-xs font-semibold opacity-70 bg-slate-50/40 dark:bg-black/20 inline-flex px-2 py-1 rounded-md">Range: {thresholds.temperature.min} - {thresholds.temperature.max}</div>
+          <VitalRiskBadge vitalState={vitalState('temperature')} />
         </div>
         
-        <div className={`col-span-1 sm:col-span-1 lg:col-span-3 glass-card glass-interactive p-6 border-l-[6px] transition-all ${currentVitals?.ecgStatus === 'abnormal' ? 'bg-red-50 border-red-500 text-red-600 shadow-[0_4px_20px_rgba(239,68,68,0.3)] dark:bg-red-900/20' : 'bg-indigo-50 border-primary text-primary shadow-[0_4px_20px_rgba(79,70,229,0.2)] dark:bg-indigo-900/20 dark:text-indigo-300'}`}>
+        <div className={`col-span-1 sm:col-span-1 lg:col-span-3 glass-card glass-interactive p-6 border-l-[6px] transition-all ${vitalState('ecgStatus')?.phase === 'critical' ? 'ring-2 ring-red-500 animate-critical-pulse' : ''} ${currentVitals?.ecgStatus === 'abnormal' ? 'bg-red-50 border-red-500 text-red-600 shadow-[0_4px_20px_rgba(239,68,68,0.3)] dark:bg-red-900/20' : 'bg-indigo-50 border-primary text-primary shadow-[0_4px_20px_rgba(79,70,229,0.2)] dark:bg-indigo-900/20 dark:text-indigo-300'}`}>
           <div className="flex justify-between items-center mb-4">
             <span className="font-bold text-sm tracking-widest uppercase opacity-80">ECG Status</span>
             <div className="p-2 rounded-lg bg-slate-50/50 dark:bg-white/10 backdrop-blur-sm animate-pulse-fast">
@@ -293,6 +331,7 @@ const PatientDashboard = () => {
                  <div className="text-xs font-bold font-mono">Raw ADC: {currentVitals.ecgRaw}</div>
              </div>
           )}
+          <VitalRiskBadge vitalState={vitalState('ecgStatus')} />
         </div>
 
         {/* Smaller Ambient Row */}
@@ -499,3 +538,5 @@ const PatientDashboard = () => {
 };
 
 export default PatientDashboard;
+
+

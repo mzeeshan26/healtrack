@@ -38,6 +38,7 @@ app.use('/api/patients', require('./routes/patients'));
 app.use('/api/vitals', require('./routes/vitals'));
 app.use('/api/thresholds', require('./routes/thresholds'));
 app.use('/api/chat', require('./routes/chat'));
+app.use('/api/insights', require('./routes/insights'));
 
 // Database connection
 const connectDB = async () => {

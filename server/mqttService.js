@@ -1,6 +1,7 @@
 const mqtt = require('mqtt');
 const Vitals = require('./models/Vitals');
 const Patient = require('./models/Patient');
+const { processClinicalInference } = require('./services/clinicalInference');
 
 const setupMQTT = (io) => {
   const brokerUrl = process.env.MQTT_BROKER || 'mqtt://broker.hivemq.com';
@@ -62,6 +63,11 @@ const setupMQTT = (io) => {
 
       // Emit live updates to frontend via Socket.io (UI uses color coding vs thresholds)
       io.emit(`vitalsUpdate_${patient._id}`, newVitals);
+
+      // Rule-based clinical inference (noise-filtered alerts + composite rules)
+      processClinicalInference(patient._id, newVitals, io).catch((err) => {
+        console.error('[clinicalInference]', err.message || err);
+      });
 
     } catch (err) {
       // JSON parse error or db error

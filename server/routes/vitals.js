@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Vitals = require('../models/Vitals');
 const auth = require('../middleware/auth');
+const { processClinicalInference } = require('../services/clinicalInference');
 
 // Get latest vitals
 router.get('/:patientId/latest', auth, async (req, res) => {
@@ -57,6 +58,9 @@ router.post('/:patientId', auth, async (req, res) => {
     const io = req.app.get('socketio');
     if (io) {
       io.emit(`vitalsUpdate_${req.params.patientId}`, newVitals);
+      processClinicalInference(req.params.patientId, newVitals, io).catch((err) => {
+        console.error('[clinicalInference]', err.message || err);
+      });
     }
     
     res.json(newVitals);

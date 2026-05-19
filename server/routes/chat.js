@@ -3,7 +3,10 @@ const router = express.Router();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const Vitals = require('../models/Vitals');
 const Patient = require('../models/Patient');
+const ClinicalInsight = require('../models/ClinicalInsight');
 const auth = require('../middleware/auth');
+const { getPatientTrackerState } = require('../services/clinicalInference');
+const { getBadgeLabel } = require('../services/abnormalityTracker');
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 const DEFAULT_FALLBACKS = ['gemini-1.5-flash', 'gemini-2.0-flash-lite', 'gemini-2.0-flash'];
@@ -135,6 +138,16 @@ router.post('/', auth, async (req, res) => {
       const latestVitals = await Vitals.findOne({ patientId }).sort({ timestamp: -1 });
 
       if (patient && latestVitals) {
+        const tracker = getPatientTrackerState(patientId);
+        const activeSignals = Object.entries(tracker.vitals)
+          .filter(([, t]) => t.phase === 'warning' || t.phase === 'critical')
+          .map(([k, t]) => `${k}: ${getBadgeLabel(t) || t.phase}`)
+          .join('; ');
+        const recentInsights = await ClinicalInsight.find({ patientId })
+          .sort({ timestamp: -1 })
+          .limit(5);
+        const insightLines = recentInsights.map((i) => `- ${i.label} (${i.severity})`).join('\n');
+
         systemPrompt = `You are a medical data analysis assistant. You are currently looking at the live ICU dashboard for patient ${patient.name}, a ${patient.age}-year-old ${patient.gender} admitted for ${patient.condition}.
 
 Current vitals (as of ${new Date(latestVitals.timestamp).toLocaleString()}):
@@ -143,7 +156,11 @@ Current vitals (as of ${new Date(latestVitals.timestamp).toLocaleString()}):
 - Body Temperature: ${latestVitals.temperature}°C
 - ECG Status: ${latestVitals.ecgStatus}
 
-Answer the user's questions based on this data. Analyze the current vitals and provide professional, concise insights. ${formatRules}`;
+Rule-based clinical inference (noise-filtered, not diagnostic):
+${activeSignals || 'No confirmed alerts'}
+${insightLines ? `Recent composite insights:\n${insightLines}` : ''}
+
+Answer using this data and active clinical signals. ${formatRules}`;
       } else {
         systemPrompt += ' Note: No patient data is currently available.';
       }
